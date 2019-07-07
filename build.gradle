@@ -1,0 +1,97 @@
+buildscript {
+    ext.kotlin_version = '1.3.41'
+
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.3'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'org.hidetake.ssh' version '2.9.0'
+}
+
+group 'chrislo27'
+version '1.0'
+
+apply plugin: "java"
+apply plugin: 'kotlin'
+apply plugin: 'com.github.johnrengelman.shadow'
+
+sourceCompatibility = 1.8
+
+sourceSets.main.java.srcDirs = [ "src/main/kotlin" ]
+
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    implementation "commons-io:commons-io:2.6"
+    implementation "com.github.chrislo27:pi_java_ssd1306:68654c2"
+    implementation "org.asynchttpclient:async-http-client:2.4.4"
+    implementation "com.fasterxml.jackson.module:jackson-module-afterburner:2.9.7"
+    implementation "com.fasterxml.jackson.module:jackson-module-kotlin:2.9.7"
+    implementation "com.googlecode.lanterna:lanterna:3.0.1"
+    
+    def log4j_version = "2.11.0"
+    implementation "org.apache.logging.log4j:log4j-core:${log4j_version}"
+    implementation "org.apache.logging.log4j:log4j-api:${log4j_version}"
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+configurations {
+    ftpAntTask
+}
+
+jar {
+    manifest {
+        attributes "Main-Class": "cigar.Cigar"
+    }
+    
+    baseName = "cigar-pi"
+    version = null
+    classifier = null
+
+    from {
+        configurations.compile.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+}
+
+shadowJar {
+    baseName = "cigar-pi"
+    version = null
+    classifier = null
+}
+
+remotes {
+    raspPi {
+        knownHosts = allowAnyHosts
+        host = project.properties["deploy.host"]
+        user = project.properties["deploy.user"]
+        password = project.properties["deploy.password"]
+    }
+}
+
+task deployPi {
+    doLast {
+        ssh.run {
+            session(remotes.raspPi) {
+                put from: file('build/libs').listFiles().toList(), into: project.properties["deploy.location"]
+            }
+        }
+    }
+}
